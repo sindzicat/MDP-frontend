@@ -1,0 +1,11 @@
+{
+	"type": "module",
+	"devDependencies": {
+		"@anduh/pug-cli": "^1.0.0-alpha8",
+		"browser-sync": "^2.27.7",
+		"cheerio": "^1.0.0-rc.10",
+		"chokidar": "^3.5.3",
+		"js-beautify": "^1.14.0",
+		"pug": "^3.0.2"
+	}
+}
