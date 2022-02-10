@@ -1,116 +1,172 @@
-"use strict";
+'use strict';
 
-/**
- * Набор допустимых символов для указания диапазона времени.
- */
-const ALLOWED_SYMBOLS = "0123456789 :hmчм"
+const hourWords = ['hour', 'hours', 'h', 'час', 'часа', 'часов', 'часы', 'ч'];
+// Сортировка от элемента наибольшей длины до элемента наименьшей длины
+hourWords.sort((a,b) => b.length - a.length);
+const rHour = new RegExp(hourWords.join('|'), 'y');
 
-/**
- * Проверяется, является ли заданный символ числом, что соответствует обозначению \d в регулярных выражениях.
- * @param {string} s 
- * @returns {boolean} True, если заданный символ — число.
- */
-function isNumber(s){
-    if (s.length > 1) throw "Функции isNumber требуется только один символ.";
-    return "0123456789".includes(s);
-}
+const minuteWords = ['minute', 'minutes', 'm', 'минут', 'минута', 'минуты', 'м'];
+// Сортировка от элемента наибольшей длины до элемента наименьшей длины
+minuteWords.sort((a,b) => b.length - a.length);
+const rMinute = new RegExp(minuteWords.join('|'), 'y');
 
-/**
- * Проверяется, что рассматриваемый символ является НЕдопустимым символом при указании пользователем диапазона времени.
- * @param {string} s 
- * @returns {boolean} True, если заданный символ НЕ допустим при указании пользователем диапазона времени.
- */
-function wrongSymbol(s){
-    if (s.length > 1) throw "Функции isNumber требуется только один символ.";
-    return !(ALLOWED_SYMBOLS.includes(s))
-}
+function isDigit(smb){ return "0123456789".includes(smb) }
 
-// Зададим новый тип данных, как здесь люди рекомендуют: https://stackoverflow.com/a/28763616
-/**
- * @typedef {object} TimeDeltaParseResult
- * @property {string} status — статус обработки: 'ok', если всё правильно, или 'err' в случае ошибки.
- * @property {string} err — сообщение об ошибке. Если status == 'ok, этого поля не будет.
- * @property {number} errPos — номер символа, где обнаружена ошибка (отсчёт от нуля).  Если status == 'ok, этого поля не будет.
- * @property {string} hours — какое количество часов ввёл пользователь. Если status == 'err', этого поля не будет.
- * @property {string} minutes — какое количество минут ввёл пользователь. Если status == 'err', этого поля не будет.
- */
-
-/**
- * Из введённой пользователем строки вычленяются часы и минуты заданного пользователем диапазона времени. Если пользователь ввёл диапазон времени в неверном формате, выдаётся сообщение с подсказкой об ошибке.
- * @param {string} timeDeltaInput 
- * @returns {TimeDeltaParseResult} Объект, который содержит число часов и минут, введённых пользователем. Если пользователь допустил ошибку при вводе диапазона времени, объект содержит информацию об этой ошибке.
- */
 export function parseTimeDelta(timeDeltaInput){
-    let pos = 0;
-    let numbers = [];
-    let lastNumber = "";
+    let timeNums = [];
+    let setHours = {
+        isTyped: false,
+        word: undefined,
+        pos: undefined
+    };
+    let setMinutes = {
+        isTyped: false,
+        word: undefined,
+        pos: undefined
+    };
+
+    const rNum = /\d+\.\d+|\d+\.|\.\d+|\d+/y;
+
     for (let i = 0; i < timeDeltaInput.length; i++){
-        const s = timeDeltaInput[i]; // анализируемый символ
-        if (wrongSymbol(s)){
-            return {
-                status: 'err',
-                errPos: i,
-                err: 'Недопустимый символ: ' + s
+        const s = timeDeltaInput[i]; // Анализируемый символ
+        if (s === ' '){ // Проверка на пробел
+            continue;
+        } else if (isDigit(s)){ // Мы нашли число
+            if (timeNums.length === 2){ // Часы и минуты уже введены
+                return {
+                    status: 'err',
+                    errPos: i,
+                    errMsg: 'Требуется максимум два числа (часы и минуты). Найдено третье число.'
+                }
+            } else { // Добавляем число в список
+                rNum.lastIndex = i; // Позиция начала поиска.
+                const match = rNum.exec(timeDeltaInput);
+                const num = Number(match[0]);
+                timeNums.push(num);
+                i += match[0].length-1;
             }
-        } else if (pos === 0){
-            if (s === " "){
-                continue
-            } else if (isNumber(s)){
-                pos++;
-                lastNumber += s;
+        } else if (s === '.'){ // Возможно, эта точка — начало числа
+            if (
+                i+1 < timeDeltaInput.length && // Если точка НЕ в конце строки.
+                isDigit(timeDeltaInput[i+1]) // Следующий символ после точки — цифра.
+            ){
+                if (timeNums.length === 2) { // Часы и минуты уже введены
+                        return {
+                            status: 'err',
+                            errPos: i,
+                            errMsg: 'Требуется максимум два числа (часы и минуты). Найдено третье число.'
+                        }
+                    } else { // Добавляем число
+                        rNum.lastIndex = i; // Позиция начала поиска.
+                        const match = rNum.exec(timeDeltaInput);
+                        const num = Number(match[0]);
+                        timeNums.push(num);
+                        i += match[0].length-1;
+                    }
             } else {
                 return {
-                    status: 'err',
-                    errPos: i,
-                    err: "Вы должны начать с ввода числа (часы или миниуты)."
-                }
+                        status: 'err',
+                        errPos: i,
+                        errMsg: 'Недопустимый символ: . (эта точка не является частью числа).'
+                    }
             }
-        } else if (pos === 1){
-            if (isNumber(s)){
-                lastNumber += s;
-            } else if (" hmчм:".includes(s)){
-                pos++;
-                numbers.push(+lastNumber);
-                lastNumber = "";
-            }
-        } else if (pos === 2){
-            if (s === " hч:"){
-                continue;
-            } else if ("мm".includes(s)){
-                pos = 4;
-            } else if (isNumber(s)){
-                pos++;
-                lastNumber += s;
-            }
-        } else if (pos === 3){
-            if (isNumber(s)){
-                lastNumber += s;
-            } else if (" mм".includes(s)){
-                pos++;
-                numbers.push(+lastNumber);
-                lastNumber = "";
-            }
-        } else if (pos === 4){
-            if (!" mм".includes(s)){
+        } else if (s === ':'){ // Нашли двоеточие
+            if (timeNums.length === 0){ // Двоеточие НЕ может идти до первого числа
                 return {
                     status: 'err',
                     errPos: i,
-                    err: "В конце пишутся m латинская или м русская или ничего."
+                    errMsg: 'Двоеточие не может идти до первого числа.'
+                }
+            } else if (timeNums.length > 1){ // Двоеточение НЕ может идти после второго числа
+                return {
+                    status: 'err',
+                    errPos: i,
+                    errMsg: 'Двоеточие не может идти после второго числа.'
+                }
+            } else if (setHours.isTyped){ // Двоеточие НЕ нужно, когда введено слово «часы».
+                return {
+                    status: 'err',
+                    errPos: i,
+                    errMsg: `Двоеточение не нужно, когда уже введено слово ${setHours.word}.`
+                }
+            } // В остальных случаях continue.
+        } else { // Остальные символы являются частью какого-то слова.
+            // Ищем различные формы записи слова "часы":
+            rHour.lastIndex = i; // Позиция начала поиска.
+            const matchHour = timeDeltaInput.match(rHour);
+            if (matchHour === null){ // Мы не нашли слова "часы", но какой-то символ есть.
+                // Ищем различные формы записи слова "минуты":
+                rMinute.lastIndex = i; // Позиция начала поиска.
+                const matchMinute = timeDeltaInput.match(rMinute);
+                if (matchMinute === null){ // Мы не нашли слова "минуты", но какой-то символ есть.
+                    return {
+                        status: 'err',
+                        errPos: i,
+                        errMsg: `Недопустимый символ: ${s}`
+                    }
+                } else { // Мы обнаружили слово "минуты"
+                    if (setMinutes.isTyped){ // Слово "минуты" уже было введено
+                        return {
+                            status: 'err',
+                            errPos: i,
+                            errMsg: `Вы уже ввели слово ${setMinutes.word}. Дважды задавать минуты в одном поле ввода нельзя.`
+                        }
+                    } else if (timeNums.length === 0) { // слово не может идти до чисел
+                        return {
+                            status: 'err',
+                            errPos: i,
+                            errMsg: "Вы должны начать с ввода числа (часы или миниуты)."
+                        }
+                    } else if (timeNums.length === 1 && setHours.isTyped){ // не может быть два слова между числами
+                        return {
+                            status: 'err',
+                            errPos: i,
+                            errMsg: `После первого числа требуется одно слово: или часы или минуты. Вы вводите второе слово ${setMinutes.word}.`
+                        }
+                    } else { // Слово "минуты" встречается впервые
+                            setMinutes.isTyped = true;
+                            setMinutes.word = matchMinute[0];
+                            setMinutes.pos = (setHours.pos === 1) ? 2 : 1;
+                            i += setMinutes.word.length -1;
+                        }
+                }
+            } else { // Мы нашли слово "часы".
+                if (setHours.isTyped){ // Слово "часы" уже было введено
+                    return {
+                        status: 'err',
+                        errPos: i,
+                        errMsg: `Вы уже ввели слово ${setHours.word}. Дважды задавать часы в одном поле ввода нельзя.`
+                    }
+                } else if (timeNums.length === 0){ // слово не может идти до чисел
+                    return {
+                        status: 'err',
+                        errPos: i,
+                        errMsg: "Вы должны начать с ввода числа (часы или миниуты)."
+                    }
+                } else if (timeNums.length === 1 && setMinutes.isTyped){ // не может быть два слова между числами
+                    return {
+                        status: 'err',
+                        errPos: i,
+                        errMsg: `После первого числа требуется одно слово: или часы или минуты. Вы вводите второе слово ${setHours.word}.`
+                    }
+                } else { // Слово "часы" встречается впервые.
+                    setHours.isTyped = true;
+                    setHours.word = matchHour[0];
+                    setHours.pos = (setMinutes.pos === 1) ? 2 : 1;
+                    i += setHours.word.length - 1;
                 }
             }
         }
     }
-    if (lastNumber !== ""){
-        numbers.push(+lastNumber)
+    if (setMinutes.pos < setHours.pos){
+        timeNums.reverse();
+    } else if (timeNums.length === 1){
+        timeNums = [0, timeNums[0]];
     }
-    if (numbers.length == 1){
-        numbers = [0, numbers[0]]
-    }
+    const [h, m] = timeNums;
     return {
         status: 'ok',
-        hours: numbers[0],
-        minutes: numbers[1]
+        hours: h,
+        minutes: m
     }
 }
-
-// console.log(parseTimeDelta("5:30"))

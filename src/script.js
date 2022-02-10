@@ -14,7 +14,7 @@ function showParsingResult(val){
 статус: ${translationData[resObj.status]}
 часы: ${resObj?.hours || "(не определено)"}
 минуты: ${resObj?.minutes || "(не определено)"}
-ошибка: ${resObj?.err || "(ошибки нет)"}
+ошибка: ${resObj?.errMsg || "(ошибки нет)"}
 номер символа, где возникла ошибка: ${resObj?.errPos+1 || ""}
     `
 }
