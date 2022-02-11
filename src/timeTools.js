@@ -14,7 +14,6 @@ function isDigit(smb){ return "0123456789".includes(smb) }
 
 export function correctTimeDelta(h,m){
     let resHours, resMinutes;
-    resMinutes = (m%1 === 0) ? m : Math.round(m, 1);
     if (h%1 === 0){
         resHours = h;
     } else {
@@ -41,44 +40,59 @@ export function parseTimeDelta(timeDeltaInput){
         pos: undefined
     };
 
+    // Для поиска числа
     const rNum = /\d+\.\d+|\d+\.|\.\d+|\d+/y;
+    // Для поиска дробных минут
+    const fracMinutesRgx = new RegExp(String.raw`(?<=(?:${rNum.source}).*?)(${rNum.source})`, 'g');
 
-    for (let i = 0; i < timeDeltaInput.length; i++){
-        const s = timeDeltaInput[i]; // Анализируемый символ
-        if (s === ' '){ // Проверка на пробел
-            continue;
-        } else if (isDigit(s)){ // Мы нашли число
-            if (timeNums.length === 2){ // Часы и минуты уже введены
-                return {
+    function parseNumber(){
+        if (timeNums.length === 2){ // Часы и минуты уже введены
+            return {
                     status: 'err',
                     errPos: i,
                     errMsg: 'Требуется максимум два числа (часы и минуты). Найдено третье число.'
                 }
-            } else { // Добавляем число в список
-                rNum.lastIndex = i; // Позиция начала поиска.
-                const match = rNum.exec(timeDeltaInput);
-                const num = Number(match[0]);
+        } else { // Извлекаем число и анализируем его
+            rNum.lastIndex = i; // Позиция начала поиска
+            const match = rNum.exec(timeDeltaInput);
+            const num = Number(match[0]);
+            
+            // Дробные минуты не допускаются
+            if (
+                timeNums.length === 1 && // Наше число второе, т.е. минуты
+                num%1 !== 0 // число минут дробное
+            ) {
+                return {
+                    status: 'err',
+                    errPos: i,
+                    errMsg: "Дробное число минут не допускается."
+                }
+            } else { // Принимаем число
                 timeNums.push(num);
                 i += match[0].length-1;
+            }
+        }
+    }
+
+    let i = 0; // Выносим из цикла, чтобы работали внутренние функции.
+    for (; i < timeDeltaInput.length; i++){
+        const s = timeDeltaInput[i]; // Анализируемый символ
+        if (s === ' '){ // Проверка на пробел
+            continue;
+        } else if (isDigit(s)){ // Мы нашли число
+            let out = parseNumber();
+            if (out !== undefined){
+                return out;
             }
         } else if (s === '.'){ // Возможно, эта точка — начало числа
             if (
                 i+1 < timeDeltaInput.length && // Если точка НЕ в конце строки.
                 isDigit(timeDeltaInput[i+1]) // Следующий символ после точки — цифра.
             ){
-                if (timeNums.length === 2) { // Часы и минуты уже введены
-                        return {
-                            status: 'err',
-                            errPos: i,
-                            errMsg: 'Требуется максимум два числа (часы и минуты). Найдено третье число.'
-                        }
-                    } else { // Добавляем число
-                        rNum.lastIndex = i; // Позиция начала поиска.
-                        const match = rNum.exec(timeDeltaInput);
-                        const num = Number(match[0]);
-                        timeNums.push(num);
-                        i += match[0].length-1;
-                    }
+                let out = parseNumber();
+                if (out !== undefined){
+                    return out;
+                }
             } else {
                 return {
                         status: 'err',
@@ -145,6 +159,22 @@ export function parseTimeDelta(timeDeltaInput){
                             setMinutes.pos = (setHours.pos === 1) ? 2 : 1;
                             i += setMinutes.word.length -1;
                         }
+                    // Раз введены минуты, проверим, что сами минуты являются дробным числом.
+                    let m = timeNums.slice(-1)[0];
+                    // Определим позицию дробных минут:
+                    if (String(m).includes('.')){
+                        let ind;
+                        if (timeNums.length === 1){
+                            ind = (new RegExp(rNum.source, 'g')).exec(timeDeltaInput).index;
+                        } else {
+                            ind = fracMinutesRgx.exec(timeDeltaInput).index;
+                        }
+                        return {
+                            status: 'err',
+                            errPos: ind,
+                            errMsg: "Дробное число минут не допускается."
+                        }
+                    }
                 }
             } else { // Мы нашли слово "часы".
                 if (setHours.isTyped){ // Слово "часы" уже было введено
@@ -177,6 +207,23 @@ export function parseTimeDelta(timeDeltaInput){
     if (setMinutes.pos < setHours.pos){
         timeNums.reverse();
     } else if (timeNums.length === 1){
+        // Дробные минуты не допускаются.
+        let m = timeNums[0];
+        console.log(m)
+        if (String(m).includes('.')) {
+            let ind;
+            if (timeNums.length === 1){
+                ind = (new RegExp(rNum.source, 'g')).exec(timeDeltaInput).index;
+            } else {
+                ind = fracMinutesRgx.exec(timeDeltaInput).index;
+            }
+            return {
+                status: 'err',
+                errPos: ind,
+                errMsg: "Дробное число минут не допускается."
+            }
+        }
+        // Приводим timeNums к формату [часы, минуты]
         timeNums = [0, timeNums[0]];
     }
     const [h, m] = timeNums;

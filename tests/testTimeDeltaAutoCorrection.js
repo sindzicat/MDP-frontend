@@ -10,15 +10,11 @@ describe("Тест функции автоматической коррекци�
         assert.deepEqual(correctTimeDelta(.5,0), [0,30])
     });
 
-    it("Учёт дробных минут.", function(){
-        assert.deepEqual(correctTimeDelta(5,10.5), [5,11])
-    });
-
     it("Учёт случая, когда минут > 60", function(){
         assert.deepEqual(correctTimeDelta(3,125), [5,5])
     });
 
-    it("Часы и минут — дробные числа, минут > 60", function(){
-        assert.deepEqual(correctTimeDelta(5.5, 130.5), [7,41])
+    it("Часы — дробное число, минут > 60", function(){
+        assert.deepEqual(correctTimeDelta(5.5, 130), [7,40])
     })
 })
