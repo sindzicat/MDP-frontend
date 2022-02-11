@@ -28,22 +28,24 @@ export function correctTimeDelta(h,m){
 }
 
 export function parseTimeDelta(timeDeltaInput){
-    let timeNums = [];
-    let setHours = {
+    const timeNums = [];
+    // Элементы списка timeNums — объекты с ключами:
+    // raw — текстовое представление числа, как оно введено пользователем,
+    // val — самое число,
+    // pos — позиция числа в тексте.
+    const hourWord = {
         isTyped: false,
-        word: undefined,
+        word: '',
         pos: undefined
     };
-    let setMinutes = {
+    const minuteWord = {
         isTyped: false,
-        word: undefined,
+        word: '',
         pos: undefined
     };
 
     // Для поиска числа
     const rNum = /\d+\.\d+|\d+\.|\.\d+|\d+/y;
-    // Для поиска дробных минут
-    const fracMinutesRgx = new RegExp(String.raw`(?<=(?:${rNum.source}).*?)(${rNum.source})`, 'g');
 
     function parseNumber(){
         if (timeNums.length === 2){ // Часы и минуты уже введены
@@ -52,15 +54,15 @@ export function parseTimeDelta(timeDeltaInput){
                     errPos: i,
                     errMsg: 'Требуется максимум два числа (часы и минуты). Найдено третье число.'
                 }
-        } else { // Извлекаем число и анализируем его
+        } else { // Извлекаем число из строки и анализируем его
             rNum.lastIndex = i; // Позиция начала поиска
             const match = rNum.exec(timeDeltaInput);
             const num = Number(match[0]);
-            
+
             // Дробные минуты не допускаются
             if (
                 timeNums.length === 1 && // Наше число второе, т.е. минуты
-                num%1 !== 0 // число минут дробное
+                match[0].includes('.') // значение минут дробное
             ) {
                 return {
                     status: 'err',
@@ -68,7 +70,11 @@ export function parseTimeDelta(timeDeltaInput){
                     errMsg: "Дробное число минут не допускается."
                 }
             } else { // Принимаем число
-                timeNums.push(num);
+                timeNums.push({
+                    raw: match[0],
+                    val: num,
+                    pos: i
+                });
                 i += match[0].length-1;
             }
         }
@@ -113,11 +119,11 @@ export function parseTimeDelta(timeDeltaInput){
                     errPos: i,
                     errMsg: 'Двоеточие не может идти после второго числа.'
                 }
-            } else if (setHours.isTyped){ // Двоеточие НЕ нужно, когда введено слово «часы».
+            } else if (hourWord.isTyped){ // Двоеточие НЕ нужно, когда введено слово «часы».
                 return {
                     status: 'err',
                     errPos: i,
-                    errMsg: `Двоеточение не нужно, когда уже введено слово ${setHours.word}.`
+                    errMsg: `Двоеточение не нужно, когда уже введено слово ${hourWord.word}.`
                 }
             } // В остальных случаях continue.
         } else { // Остальные символы являются частью какого-то слова.
@@ -135,11 +141,11 @@ export function parseTimeDelta(timeDeltaInput){
                         errMsg: `Недопустимый символ: ${s}`
                     }
                 } else { // Мы обнаружили слово "минуты"
-                    if (setMinutes.isTyped){ // Слово "минуты" уже было введено
+                    if (minuteWord.isTyped){ // Слово "минуты" уже было введено
                         return {
                             status: 'err',
                             errPos: i,
-                            errMsg: `Вы уже ввели слово ${setMinutes.word}. Дважды задавать минуты в одном поле ввода нельзя.`
+                            errMsg: `Вы уже ввели слово ${minuteWord.word}. Дважды задавать минуты в одном поле ввода нельзя.`
                         }
                     } else if (timeNums.length === 0) { // слово не может идти до чисел
                         return {
@@ -147,41 +153,35 @@ export function parseTimeDelta(timeDeltaInput){
                             errPos: i,
                             errMsg: "Вы должны начать с ввода числа (часы или миниуты)."
                         }
-                    } else if (timeNums.length === 1 && setHours.isTyped){ // не может быть два слова между числами
+                    } else if (timeNums.length === 1 && hourWord.isTyped){ // не может быть два слова между числами
                         return {
                             status: 'err',
                             errPos: i,
-                            errMsg: `После первого числа требуется одно слово: или часы или минуты. Вы вводите второе слово ${setMinutes.word}.`
+                            errMsg: `После первого числа требуется одно слово: или часы или минуты. Вы вводите второе слово ${minuteWord.word}.`
                         }
                     } else { // Слово "минуты" встречается впервые
-                            setMinutes.isTyped = true;
-                            setMinutes.word = matchMinute[0];
-                            setMinutes.pos = (setHours.pos === 1) ? 2 : 1;
-                            i += setMinutes.word.length -1;
+                            minuteWord.isTyped = true;
+                            minuteWord.word = matchMinute[0];
+                            minuteWord.pos = (hourWord.pos === 1) ? 2 : 1;
+                            i += minuteWord.word.length -1;
                         }
                     // Раз введены минуты, проверим, что сами минуты являются дробным числом.
                     let m = timeNums.slice(-1)[0];
                     // Определим позицию дробных минут:
-                    if (String(m).includes('.')){
-                        let ind;
-                        if (timeNums.length === 1){
-                            ind = (new RegExp(rNum.source, 'g')).exec(timeDeltaInput).index;
-                        } else {
-                            ind = fracMinutesRgx.exec(timeDeltaInput).index;
-                        }
+                    if (m.raw.includes('.')){
                         return {
                             status: 'err',
-                            errPos: ind,
+                            errPos: m.pos,
                             errMsg: "Дробное число минут не допускается."
                         }
                     }
                 }
             } else { // Мы нашли слово "часы".
-                if (setHours.isTyped){ // Слово "часы" уже было введено
+                if (hourWord.isTyped){ // Слово "часы" уже было введено
                     return {
                         status: 'err',
                         errPos: i,
-                        errMsg: `Вы уже ввели слово ${setHours.word}. Дважды задавать часы в одном поле ввода нельзя.`
+                        errMsg: `Вы уже ввели слово ${hourWord.word}. Дважды задавать часы в одном поле ввода нельзя.`
                     }
                 } else if (timeNums.length === 0){ // слово не может идти до чисел
                     return {
@@ -189,47 +189,44 @@ export function parseTimeDelta(timeDeltaInput){
                         errPos: i,
                         errMsg: "Вы должны начать с ввода числа (часы или миниуты)."
                     }
-                } else if (timeNums.length === 1 && setMinutes.isTyped){ // не может быть два слова между числами
+                } else if (timeNums.length === 1 && minuteWord.isTyped){ // не может быть два слова между числами
                     return {
                         status: 'err',
                         errPos: i,
-                        errMsg: `После первого числа требуется одно слово: или часы или минуты. Вы вводите второе слово ${setHours.word}.`
+                        errMsg: `После первого числа требуется одно слово: или часы или минуты. Вы вводите второе слово ${hourWord.word}.`
                     }
                 } else { // Слово "часы" встречается впервые.
-                    setHours.isTyped = true;
-                    setHours.word = matchHour[0];
-                    setHours.pos = (setMinutes.pos === 1) ? 2 : 1;
-                    i += setHours.word.length - 1;
+                    hourWord.isTyped = true;
+                    hourWord.word = matchHour[0];
+                    hourWord.pos = (minuteWord.pos === 1) ? 2 : 1;
+                    i += hourWord.word.length - 1;
                 }
             }
         }
     }
-    if (setMinutes.pos < setHours.pos){
+    if (minuteWord.pos < hourWord.pos){ // Пользователь указал минуты, а потом часы ¯\_(ツ)_/¯
         timeNums.reverse();
     } else if (timeNums.length === 1){
         // Дробные минуты не допускаются.
         let m = timeNums[0];
-        console.log(m)
-        if (String(m).includes('.')) {
-            let ind;
-            if (timeNums.length === 1){
-                ind = (new RegExp(rNum.source, 'g')).exec(timeDeltaInput).index;
-            } else {
-                ind = fracMinutesRgx.exec(timeDeltaInput).index;
-            }
+        if (m.raw.includes('.')) {
             return {
                 status: 'err',
-                errPos: ind,
+                errPos: m.pos,
                 errMsg: "Дробное число минут не допускается."
             }
         }
         // Приводим timeNums к формату [часы, минуты]
-        timeNums = [0, timeNums[0]];
+        timeNums.splice(
+            0, // вставляем в начало списка
+            0, // ничего не удаляем
+            {val:0} // вставляем объект для часов
+        )
     }
     const [h, m] = timeNums;
     return {
         status: 'ok',
-        hours: h,
-        minutes: m
+        hours: h.val,
+        minutes: m.val
     }
 }
