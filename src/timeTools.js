@@ -12,6 +12,22 @@ const rMinute = new RegExp(minuteWords.join('|'), 'y');
 
 function isDigit(smb){ return "0123456789".includes(smb) }
 
+export function correctTimeDelta(h,m){
+    let resHours, resMinutes;
+    resMinutes = (m%1 === 0) ? m : Math.round(m, 1);
+    if (h%1 === 0){
+        resHours = h;
+    } else {
+        resHours = Math.floor(h);
+        resMinutes += h%1 * 60;
+    }
+    if (resMinutes%60 !== 0){
+        resHours += Math.floor(resMinutes / 60);
+        resMinutes = resMinutes%60;
+    }
+    return [resHours, resMinutes];
+}
+
 export function parseTimeDelta(timeDeltaInput){
     let timeNums = [];
     let setHours = {
