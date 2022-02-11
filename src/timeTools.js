@@ -13,14 +13,13 @@ const rMinute = new RegExp(minuteWords.join('|'), 'y');
 function isDigit(smb){ return "0123456789".includes(smb) }
 
 export function correctTimeDelta(h,m){
-    let resHours, resMinutes;
-    if (h%1 === 0){
-        resHours = h;
-    } else {
+    let resHours = h;
+    let resMinutes = m;
+    if (h%1 !== 0){
         resHours = Math.floor(h);
         resMinutes += h%1 * 60;
     }
-    if (resMinutes%60 !== 0){
+    if (resMinutes >= 60){
         resHours += Math.floor(resMinutes / 60);
         resMinutes = resMinutes%60;
     }
@@ -77,6 +76,14 @@ export function parseTimeDelta(timeDeltaInput){
                 });
                 i += match[0].length-1;
             }
+        }
+    }
+
+    if (timeDeltaInput === ''){
+        return {
+            status: 'err',
+            errPos: 0,
+            errMsg: 'Ничего не введено'
         }
     }
 
@@ -229,4 +236,47 @@ export function parseTimeDelta(timeDeltaInput){
         hours: h.val,
         minutes: m.val
     }
+}
+
+export function formatTimeDelta(h,m, full=true){
+    let strHour = String(h);
+    let strMinute = String(m);
+    let hourWord = '';
+    let minuteWord = '';
+
+    if (strHour.length >= 2 && strHour.slice(-2,-1) === '1'){
+        hourWord = 'часов';
+    } else {
+        let lastSymbol = strHour.slice(-1);
+        if ('056789'.includes(lastSymbol)){
+            hourWord = 'часов';
+        } else if ('234'.includes(lastSymbol)){
+            hourWord = 'часа';
+        } else { // последний символ = 1
+            hourWord = 'час';
+        }
+    }
+
+    if (strMinute.length >= 2 && strMinute.slice(-2,-1) === '1'){
+        minuteWord = 'минут';
+    } else {
+        let lastSymbol = strMinute.slice(-1);
+        if ('056789'.includes(lastSymbol)){
+            minuteWord = 'минут';
+        } else if ('234'.includes(lastSymbol)){
+            minuteWord = 'минуты';
+        } else { // последний символ = 1
+            minuteWord = 'минута'
+        }
+    }
+
+    // https://ru.wikipedia.org/wiki/Законы_де_Моргана
+    if (!(full || (h === 0 && m === 0))){
+        if (h === 0){
+            return `${m} ${minuteWord}`;
+        } else if (m === 0){
+            return `${h} ${hourWord}`
+        }
+    }
+    return `${h} ${hourWord} ${m} ${minuteWord}`;
 }

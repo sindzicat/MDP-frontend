@@ -1,5 +1,5 @@
 "use strict";
-import { parseTimeDelta } from './timeTools.js';
+import { parseTimeDelta, formatTimeDelta, correctTimeDelta } from './timeTools.js';
 
 const input = document.querySelector('input');
 const node = document.querySelector('.output');
@@ -21,4 +21,29 @@ function showParsingResult(val){
 
 showParsingResult(input.value);
 
-input.addEventListener('input', (e) => console.log(showParsingResult(e.target.value)));
+function processTimeDelta(inputNode){
+    const parseRes = parseTimeDelta(inputNode.value);
+    if (parseRes.status === 'ok'){
+        let {hours, minutes} = parseRes;
+        let [h,m] = correctTimeDelta(hours, minutes);
+        inputNode.value = formatTimeDelta(h,m, false);
+    }
+
+}
+
+processTimeDelta(input);
+
+input.addEventListener('input', function(el){
+    showParsingResult(el.target.value)
+});
+
+// Потеря фокуса при нажатии Enter
+input.addEventListener('keydown', function(event){
+    if (['Enter', 'NumpadEnter'].includes(event.code)){
+        this.blur();
+    }
+});
+
+input.addEventListener('blur', function(el){
+    processTimeDelta(el.target);
+})
