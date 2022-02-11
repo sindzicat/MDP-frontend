@@ -213,7 +213,7 @@ export function parseTimeDelta(timeDeltaInput){
     }
     if (minuteWord.pos < hourWord.pos){ // Пользователь указал минуты, а потом часы ¯\_(ツ)_/¯
         timeNums.reverse();
-    } else if (timeNums.length === 1){
+    } else if (timeNums.length === 1 && !hourWord.isTyped){
         // Дробные минуты не допускаются.
         let m = timeNums[0];
         if (m.raw.includes('.')) {
