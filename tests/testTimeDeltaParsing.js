@@ -11,7 +11,8 @@ describe("Функция разбора ввода отрезка времени
                     assert.deepStrictEqual(parseTimeDelta(s), {
                         status: 'err',
                         errPos: 0,
-                        errMsg: 'Недопустимый символ: '+ s
+                        errCode: 2,
+                        errMsg: 'Недопустимый текст: '+ s
                     })
                 })
             }
@@ -23,7 +24,8 @@ describe("Функция разбора ввода отрезка времени
                     assert.deepStrictEqual(parseTimeDelta('1'+s), {
                         status: 'err',
                         errPos: 1,
-                        errMsg: 'Недопустимый символ: ' + s
+                        errCode: 2,
+                        errMsg: 'Недопустимый текст: ' + s
                     })
                 })
             }
@@ -35,14 +37,14 @@ describe("Функция разбора ввода отрезка времени
             assert.deepStrictEqual(parseTimeDelta('h 5'), {
                 status: 'err',
                 errPos: 0,
-                errMsg: "Вы должны начать с ввода числа (часы или миниуты)."
+                errMsg: "Перед словом h должно идти число."
             })
         })
         it("Пропуск пробельных символов в начале строки", function(){
             assert.deepStrictEqual(parseTimeDelta('   h 5'), {
                 status: 'err',
                 errPos: 3,
-                errMsg: "Вы должны начать с ввода числа (часы или миниуты)."
+                errMsg: "Перед словом h должно идти число."
             })
         })
     })

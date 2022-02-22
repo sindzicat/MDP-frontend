@@ -1,6 +1,6 @@
 'use strict';
 
-const hourWords = ['hour', 'hours', 'h', 'час', 'часа', 'часов', 'часы', 'ч'];
+const hourWords = ['hour', 'hours', 'h', 'час', 'часа', 'часов', 'часы', 'ч', ':'];
 // Сортировка от элемента наибольшей длины до элемента наименьшей длины
 hourWords.sort((a,b) => b.length - a.length);
 const rHour = new RegExp(hourWords.join('|'), 'y');
@@ -10,7 +10,10 @@ const minuteWords = ['minute', 'minutes', 'm', 'минут', 'минута', 'м
 minuteWords.sort((a,b) => b.length - a.length);
 const rMinute = new RegExp(minuteWords.join('|'), 'y');
 
-function isDigit(smb){ return "0123456789".includes(smb) }
+const rWord = /\.?[^\d:\n ]+/y
+
+// Для поиска числа со знаком
+const rNum = /(?:\+|\-){0,1}\s*(?:\d+\.\d+|\d+\.|\.\d+|\d+)/y;
 
 export function correctTimeDelta(h,m){
     let resHours = h;
@@ -26,215 +29,202 @@ export function correctTimeDelta(h,m){
     return [resHours, resMinutes];
 }
 
-export function parseTimeDelta(timeDeltaInput){
-    const timeNums = [];
-    // Элементы списка timeNums — объекты с ключами:
-    // raw — текстовое представление числа, как оно введено пользователем,
-    // val — самое число,
-    // pos — позиция числа в тексте.
-    const hourWord = {
-        isTyped: false,
-        word: '',
-        pos: undefined
-    };
-    const minuteWord = {
-        isTyped: false,
-        word: '',
-        pos: undefined
-    };
+// Лексер. Разбор ввода времени на смысловые единицы.
+export function scanTimeDelta(timeDeltaInput){
+    const elements = [];
+    let error;
 
-    // Для поиска числа
-    const rNum = /\d+\.\d+|\d+\.|\.\d+|\d+/y;
-
-    function parseNumber(){
-        if (timeNums.length === 2){ // Часы и минуты уже введены
-            return {
-                    status: 'err',
-                    errPos: i,
-                    errMsg: 'Требуется максимум два числа (часы и минуты). Найдено третье число.'
-                }
-        } else { // Извлекаем число из строки и анализируем его
-            rNum.lastIndex = i; // Позиция начала поиска
-            const match = rNum.exec(timeDeltaInput);
-            const num = Number(match[0]);
-
-            // Дробные минуты не допускаются
-            if (
-                timeNums.length === 1 && // Наше число второе, т.е. минуты
-                match[0].includes('.') // значение минут дробное
-            ) {
-                return {
-                    status: 'err',
-                    errPos: i,
-                    errMsg: "Дробное число минут не допускается."
-                }
-            } else { // Принимаем число
-                timeNums.push({
-                    raw: match[0],
-                    val: num,
-                    pos: i
-                });
-                i += match[0].length-1;
-            }
+    function scanNumber(){
+        // Поиск числа
+        rNum.lastIndex = i;
+        const match = rNum.exec(timeDeltaInput);
+        if (match === null){ // Число не найдено.
+            // Ситуация, что число не обнаружено, возможна только
+            // тогда, когда первым символом является либо точка,
+            // либо плюс или минус. В остальных случаях первым
+            // символом поиска является цифра, и поиск обязательно
+            // найдёт хоть какое-то число.
+            const symbolName = {
+                '+': 'Символ плюса',
+                '-': 'Символ минуса',
+                '.': 'Символ точки'
+            }[timeDeltaInput[i]]
+            error = {
+                status: 'err',
+                errPos: i,
+                errCode: 1,
+                errMsg: `${symbolName} в позиции ${i} не является частью числа.`
+            };
+            return 'err';
+        } else { // Мы нашли число.
+            // Уберём пробелы между знаком числа и самим числом.
+            const num = Number(match[0].replace(' ', ''));
+            elements.push({
+                type: 'number',
+                raw: match[0],
+                num: num,
+                pos: i,
+            });
+            i += match[0].length - 1;
+            return 'ok';
         }
     }
 
-    if (timeDeltaInput === ''){
+    function scanWord(){
+        // Ищем слово "часы" ("час", "часов", "hour", "h" и т.д.):
+        rHour.lastIndex = i;
+        const matchHour = rHour.exec(timeDeltaInput);
+        if (matchHour !== null){ // найдено слово "часы"
+            elements.push({
+                type: 'word hour',
+                word: matchHour[0],
+                pos: i,
+            });
+            i += matchHour[0].length - 1;
+            return 'ok';
+        }
+        // if-else не нужен, т.к. в предыдущем блоке return.
+        
+        // Ищем слово "минуты" ("минут", "minutes"  и т.д.):
+        rMinute.lastIndex = i;
+        const matchMinute = rMinute.exec(timeDeltaInput);
+        if (matchMinute !== null){ // найдено слово "минуты"
+            elements.push({
+                type: 'word minute',
+                word: matchMinute[0],
+                pos: i
+            });
+            i += matchMinute[0].length - 1;
+            return 'ok';
+        }
+        // if-else не нужен, т.к. в предыдущем блоке return.
+
+        // Если два предыдущих блока не сработали,
+        // это означает, что мы нашли недопустимое слово.
+        // Прочтём это слово целиком.
+        rWord.lastIndex = i;
+        const matchWord = rWord.exec(timeDeltaInput);
+        error = {
+            status: 'err',
+            errPos: i,
+            errCode: 2,
+            errMsg: `Недопустимый текст: ${matchWord[0]}`
+        };
+        return 'err';
+    }
+
+    // Сканирование текста
+    const inputMaxLength = 30; // Максимальная длина ввода
+    // Пользователь может обмануть веб-интерфейс через DevTools,
+    // поэтому добавим проверку длины строки на JS.
+    if (timeDeltaInput.length > 30){
         return {
             status: 'err',
-            errPos: 0,
-            errMsg: 'Ничего не введено'
+            errPos: 30,
+            errMsg: `Превышена максимальная длина ввода. Допускается не более ${inputMaxLength} символов.`
         }
     }
-
-    let i = 0; // Выносим из цикла, чтобы работали внутренние функции.
+    let i = 0;
     for (; i < timeDeltaInput.length; i++){
-        const s = timeDeltaInput[i]; // Анализируемый символ
-        if (s === ' '){ // Проверка на пробел
+        const s = timeDeltaInput[i];
+        if (s === ' '){
             continue;
-        } else if (isDigit(s)){ // Мы нашли число
-            let out = parseNumber();
-            if (out !== undefined){
-                return out;
+        } else if ('0123456789.-+'.includes(s)){
+            let ans = scanNumber();
+            if (ans === 'err'){
+                return error;
             }
-        } else if (s === '.'){ // Возможно, эта точка — начало числа
-            if (
-                i+1 < timeDeltaInput.length && // Если точка НЕ в конце строки.
-                isDigit(timeDeltaInput[i+1]) // Следующий символ после точки — цифра.
-            ){
-                let out = parseNumber();
-                if (out !== undefined){
-                    return out;
-                }
-            } else {
-                return {
-                        status: 'err',
-                        errPos: i,
-                        errMsg: 'Недопустимый символ: . (эта точка не является частью числа).'
-                    }
-            }
-        } else if (s === ':'){ // Нашли двоеточие
-            if (timeNums.length === 0){ // Двоеточие НЕ может идти до первого числа
-                return {
-                    status: 'err',
-                    errPos: i,
-                    errMsg: 'Двоеточие не может идти до первого числа.'
-                }
-            } else if (timeNums.length > 1){ // Двоеточение НЕ может идти после второго числа
-                return {
-                    status: 'err',
-                    errPos: i,
-                    errMsg: 'Двоеточие не может идти после второго числа.'
-                }
-            } else if (hourWord.isTyped){ // Двоеточие НЕ нужно, когда введено слово «часы».
-                return {
-                    status: 'err',
-                    errPos: i,
-                    errMsg: `Двоеточение не нужно, когда уже введено слово ${hourWord.word}.`
-                }
-            } // В остальных случаях continue.
-        } else { // Остальные символы являются частью какого-то слова.
-            // Ищем различные формы записи слова "часы":
-            rHour.lastIndex = i; // Позиция начала поиска.
-            const matchHour = timeDeltaInput.match(rHour);
-            if (matchHour === null){ // Мы не нашли слова "часы", но какой-то символ есть.
-                // Ищем различные формы записи слова "минуты":
-                rMinute.lastIndex = i; // Позиция начала поиска.
-                const matchMinute = timeDeltaInput.match(rMinute);
-                if (matchMinute === null){ // Мы не нашли слова "минуты", но какой-то символ есть.
-                    return {
-                        status: 'err',
-                        errPos: i,
-                        errMsg: `Недопустимый символ: ${s}`
-                    }
-                } else { // Мы обнаружили слово "минуты"
-                    if (minuteWord.isTyped){ // Слово "минуты" уже было введено
-                        return {
-                            status: 'err',
-                            errPos: i,
-                            errMsg: `Вы уже ввели слово ${minuteWord.word}. Дважды задавать минуты в одном поле ввода нельзя.`
-                        }
-                    } else if (timeNums.length === 0) { // слово не может идти до чисел
-                        return {
-                            status: 'err',
-                            errPos: i,
-                            errMsg: "Вы должны начать с ввода числа (часы или миниуты)."
-                        }
-                    } else if (timeNums.length === 1 && hourWord.isTyped){ // не может быть два слова между числами
-                        return {
-                            status: 'err',
-                            errPos: i,
-                            errMsg: `После первого числа требуется одно слово: или часы или минуты. Вы вводите второе слово ${minuteWord.word}.`
-                        }
-                    } else { // Слово "минуты" встречается впервые
-                            minuteWord.isTyped = true;
-                            minuteWord.word = matchMinute[0];
-                            minuteWord.pos = (hourWord.pos === 1) ? 2 : 1;
-                            i += minuteWord.word.length -1;
-                        }
-                    // Раз введены минуты, проверим, что сами минуты являются дробным числом.
-                    let m = timeNums.slice(-1)[0];
-                    // Определим позицию дробных минут:
-                    if (m.raw.includes('.')){
-                        return {
-                            status: 'err',
-                            errPos: m.pos,
-                            errMsg: "Дробное число минут не допускается."
-                        }
-                    }
-                }
-            } else { // Мы нашли слово "часы".
-                if (hourWord.isTyped){ // Слово "часы" уже было введено
-                    return {
-                        status: 'err',
-                        errPos: i,
-                        errMsg: `Вы уже ввели слово ${hourWord.word}. Дважды задавать часы в одном поле ввода нельзя.`
-                    }
-                } else if (timeNums.length === 0){ // слово не может идти до чисел
-                    return {
-                        status: 'err',
-                        errPos: i,
-                        errMsg: "Вы должны начать с ввода числа (часы или миниуты)."
-                    }
-                } else if (timeNums.length === 1 && minuteWord.isTyped){ // не может быть два слова между числами
-                    return {
-                        status: 'err',
-                        errPos: i,
-                        errMsg: `После первого числа требуется одно слово: или часы или минуты. Вы вводите второе слово ${hourWord.word}.`
-                    }
-                } else { // Слово "часы" встречается впервые.
-                    hourWord.isTyped = true;
-                    hourWord.word = matchHour[0];
-                    hourWord.pos = (minuteWord.pos === 1) ? 2 : 1;
-                    i += hourWord.word.length - 1;
-                }
+        } else {
+            let ans = scanWord();
+            if (ans === 'err'){
+                return error;
             }
         }
     }
-    if (minuteWord.pos < hourWord.pos){ // Пользователь указал минуты, а потом часы ¯\_(ツ)_/¯
-        timeNums.reverse();
-    } else if (timeNums.length === 1 && !hourWord.isTyped){
-        // Дробные минуты не допускаются.
-        let m = timeNums[0];
-        if (m.raw.includes('.')) {
-            return {
-                status: 'err',
-                errPos: m.pos,
-                errMsg: "Дробное число минут не допускается."
-            }
-        }
-        // Приводим timeNums к формату [часы, минуты]
-        timeNums.splice(
-            0, // вставляем в начало списка
-            0, // ничего не удаляем
-            {val:0} // вставляем объект для часов
-        )
-    }
-    const [h, m] = timeNums;
     return {
         status: 'ok',
-        hours: h.val,
-        minutes: m.val
+        elements: elements
+    };
+}
+
+// Парсер. Анализ смысловых единиц из ввода времени.
+export function parseTimeDelta(timeDeltaInput){
+    const ans = scanTimeDelta(timeDeltaInput);
+    if (ans.status === 'err'){
+        return ans;
+    }
+
+    const elements = ans.elements;
+    let hours = 0;
+    let minutes = 0;
+
+    let i = 0;
+    for (; i < elements.length; i++){
+        const curEl = elements[i];
+        const nextEl = (i + 1 < elements.length) ? elements[i+1] : {type: 'none'}
+
+        if (curEl.type === 'number'){
+            // 1) После числа идёт другое число или конец строки.
+            if (['number', 'none'].includes(nextEl.type)){
+                // Текущее число — минуты
+                minutes += curEl.num;
+            // 2) После числа идёт двоеточие (специальный формат).
+            } else if (nextEl.raw === ':'){
+                const el3 = (i + 2 < elements.length) ? elements[i+2] : {type: 'none', num: 0};
+                if (['number','none'].includes(el3.type)){
+                    // Имеем формат вида <часы>:<минуты> или <часы>:[конец строки]
+                    hours += curEl.num;
+                    minutes += el3.num;
+                    i += 2;
+                } else {
+                    // Имеем некорректный формат <часы>:<слово>
+                    return {
+                        status: 'err',
+                        errPos: el3.pos,
+                        errMsg: `Перед словом ${el3.word} должно быть число.`
+                    }
+                }
+            // 3) После числа идёт любое корректное слово
+            } else {
+                if (nextEl.type.endsWith('hour')){
+                    hours += curEl.num;
+                    i += 1;
+                } else {
+                    minutes += curEl.num;
+                    i += 1;
+                }
+            }
+        } else { // Если элемент не число, то он является словом.
+            return {
+                status: 'err',
+                errPos: curEl.pos,
+                errMsg: `Перед словом ${curEl.word} должно идти число.`
+            }
+        }
+    }
+    // Коррекция значений часов и минут
+    const [h, m] = correctTimeDelta(hours, minutes);
+    // Проверка границ планирования
+    if (h > 18){
+        return {
+            status: 'err',
+            errPos: -1,
+            errMsg: `Нельзя планировать более, чем на 18 часов. У вас запланировано на ${formatTimeDelta(h, 0, false)}.`
+        }
+    }
+    // Отрицательное время не допустимо
+    if (h < 0 || m < 0){
+        return {
+            status: 'err',
+            errPos: -1,
+            errMsg: `Отрицательное время не допускается. У вас получилось ${formatTimeDelta(h, m)}.`
+        }
+    }
+    // Если все барьеры пройдены, то значение часов и минут введено корректно.
+    return {
+        status: 'ok',
+        hours: h,
+        minutes: m
     }
 }
 

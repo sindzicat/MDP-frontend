@@ -10,11 +10,12 @@ const translationData = {
 
 function showParsingResult(val){
     const resObj = parseTimeDelta(val);
+    console.log(resObj);
     node.textContent = `
 статус: ${translationData[resObj.status]}
-часы: ${resObj?.hours || "(не определено)"}
-минуты: ${resObj?.minutes || "(не определено)"}
-ошибка: ${resObj?.errMsg || "(ошибки нет)"}
+часы: ${resObj.hours !== undefined ? resObj.hours : "(не определено)"}
+минуты: ${resObj.minutes !== undefined ? resObj.minutes : "(не определено)"}
+ошибка: ${resObj.errMsg !== undefined ? resObj.errMsg : "(ошибки нет)"}
 номер символа, где возникла ошибка: ${resObj?.errPos+1 || ""}
     `
 }
