@@ -1,8 +1,7 @@
 {
 	"type": "module",
 	"devDependencies": {
-		"@anduh/pug-cli": "^1.0.0-alpha8",
-		"browser-sync": "^2.27.7",
+		"browser-sync": "file:_packages\\browser-sync.tgz",
 		"chai": "^4.3.6",
 		"cheerio": "^1.0.0-rc.10",
 		"chokidar": "^3.5.3",
